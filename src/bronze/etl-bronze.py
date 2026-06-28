@@ -77,7 +77,6 @@ def define_struct_type_evaluation_state_literacy():
 def define_struct_type_evaluation_city_literacy():
     return StructType([
         StructField("ano", IntegerType(), False),
-        StructField("sigla_uf", StringType(), False),
         StructField("id_municipio", StringType(), False),
         StructField("serie", StringType(), False),
         StructField("rede", StringType(), False),
