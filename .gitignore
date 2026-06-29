@@ -1,1 +1,9 @@
+# Base de dados de aluno (>200MB — baixar à parte)
 /data/fonte-dados/br_inep_avaliacao_alfabetizacao_aluno.csv
+
+# Artefatos Python
+__pycache__/
+*.pyc
+
+# Empacotamento temporário da Lambda
+producer.zip
