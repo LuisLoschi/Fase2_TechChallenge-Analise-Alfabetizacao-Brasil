@@ -39,10 +39,10 @@ schema_student = StructType([
     StructField("serie", StringType(), True),
     StructField("rede", StringType(), True),
     StructField("presenca", StringType(), True),
-    StructField("preenchimento_caderno", DoubleType(), True),
-    StructField("alfabetizado", DoubleType(), True),
-    StructField("proficiencia", DoubleType(), True),
-    StructField("peso_aluno", DoubleType(), True)
+    StructField("preenchimento_caderno", StringType(), True),
+    StructField("alfabetizado", StringType(), True),
+    StructField("proficiencia", StringType(), True),
+    StructField("peso_aluno", StringType(), True),
 ])
 
 # Lê do Kinesis como stream
@@ -66,8 +66,8 @@ def process_batch(data_frame, batch_id):
     df = data_frame.select(
         F.from_json(F.col("data").cast("string"), schema_student).alias("payload")
     ).select("payload.*") \
-     .withColumn("preenchimento_caderno", F.when(F.col("preenchimento_caderno") == "", None).otherwise(F.col("preenchimento_caderno").cast(DoubleType()))) \
-     .withColumn("alfabetizado", F.when(F.col("alfabetizado") == "", None).otherwise(F.col("alfabetizado").cast(DoubleType()))) \
+     .withColumn("preenchimento_caderno", F.when(F.col("preenchimento_caderno") == "", None).otherwise(F.col("preenchimento_caderno").cast(IntegerType()))) \
+     .withColumn("alfabetizado", F.when(F.col("alfabetizado") == "", None).otherwise(F.col("alfabetizado").cast(IntegerType()))) \
      .withColumn("proficiencia", F.when(F.col("proficiencia") == "", None).otherwise(F.col("proficiencia").cast(DoubleType()))) \
      .withColumn("peso_aluno", F.when(F.col("peso_aluno") == "", None).otherwise(F.col("peso_aluno").cast(DoubleType())))
 
