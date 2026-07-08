@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# deploy.sh — Provisionamento e execução da pipeline (Bronze + Silver) na AWS.
+# deploy.sh — Provisionamento e execução da pipeline (Bronze + Silver + Gold) na AWS.
 #
 # Automatiza, de forma idempotente, o provisionamento e a execução da pipeline.
 # Cada subcomando pode ser executado isoladamente, o que é importante no AWS
@@ -16,8 +16,10 @@
 #   crawler-bronze   Cria/atualiza e executa o Crawler da Bronze.
 #   silver           Cria/atualiza e executa o Glue Job da Silver.
 #   crawler-silver   Cria/atualiza e executa o Crawler da Silver.
+#   gold             Cria/atualiza e executa o Glue Job da Gold.
+#   crawler-gold     Cria/atualiza e executa o Crawler da Gold.
 #   validate         Roda consultas de validação no Athena.
-#   all              Executa: upload -> bronze -> crawler-bronze -> silver -> crawler-silver -> validate.
+#   all              Executa: upload -> bronze -> crawler-bronze -> silver -> crawler-silver -> gold -> crawler-gold -> validate.
 #   streaming        (opcional) Provisiona Kinesis + Glue streaming + Lambda e inicia a produção do aluno.
 #   streaming-status (opcional) Mostra o progresso da ingestão do aluno na Bronze.
 #   streaming-stop   (opcional) Para o Glue streaming job do aluno.
@@ -47,11 +49,15 @@ ALUNO_CSV="arquivos/br_inep_avaliacao_alfabetizacao_aluno.csv"
 
 JOB_BRONZE="etl-bronze-alfabetizacao"
 JOB_SILVER="etl-silver-alfabetizacao"
+JOB_GOLD="etl-gold-alfabetizacao"
 JOB_STREAM="glue-streaming-alfabetizacao-aluno"
 CRAWLER_BRONZE="crawler-bronze-alfabetizacao"
 CRAWLER_SILVER="crawler-silver-alfabetizacao"
+CRAWLER_GOLD="crawler-gold-alfabetizacao"
 DB_BRONZE="db_alfabetizacao_bronze"
 DB_SILVER="db_alfabetizacao_silver"
+DB_GOLD="db_alfabetizacao_gold"
+GOLD_TABLE="alfabetizacao_analise_output"
 LAMBDA_NAME="producer-student-data"
 
 # Caminho da raiz do projeto (duas pastas acima deste script).
@@ -231,6 +237,7 @@ cmd_upload() {
   log "Enviando scripts..."
   aws s3 cp "$ROOT_DIR/src/bronze/" "s3://$BUCKET/scripts/" --recursive --exclude "*" --include "*.py"
   aws s3 cp "$ROOT_DIR/src/silver/etl-silver.py" "s3://$BUCKET/scripts/etl-silver.py"
+  aws s3 cp "$ROOT_DIR/src/gold/etl-gold.py" "s3://$BUCKET/scripts/etl-gold.py"
   log "✅ Upload concluído."
 }
 
@@ -270,6 +277,24 @@ cmd_crawler_silver() {
   aws glue get-tables --database-name "$DB_SILVER" --query "TableList[].Name" --output table
 }
 
+cmd_gold() {
+  init_vars
+  log "Sincronizando script da Gold no S3..."
+  aws s3 cp "$ROOT_DIR/src/gold/etl-gold.py" "s3://$BUCKET/scripts/etl-gold.py" >/dev/null
+  local cmd="{\"Name\":\"glueetl\",\"ScriptLocation\":\"s3://$BUCKET/scripts/etl-gold.py\",\"PythonVersion\":\"3\"}"
+  local args="{\"--BUCKET_NAME\":\"$BUCKET\",\"--TempDir\":\"s3://$BUCKET/tmp/\"}"
+  ensure_glue_job "$JOB_GOLD" "$cmd" "$args"
+  run_glue_job "$JOB_GOLD"
+}
+
+cmd_crawler_gold() {
+  init_vars
+  ensure_database "$DB_GOLD"
+  ensure_crawler "$CRAWLER_GOLD" "$DB_GOLD" "gold_" "s3://$BUCKET/gold/"
+  run_crawler "$CRAWLER_GOLD"
+  aws glue get-tables --database-name "$DB_GOLD" --query "TableList[].Name" --output table
+}
+
 cmd_validate() {
   init_vars
   log "Tabelas na Silver:"
@@ -278,6 +303,10 @@ cmd_validate() {
   athena "SELECT count(*) FROM ${DB_SILVER}.silver_avaliacao_alfabetizacao_uf" || true
   log "Decodificação de domínio (rede/serie):"
   athena "SELECT DISTINCT rede, rede_nome, serie, serie_nome FROM ${DB_SILVER}.silver_avaliacao_alfabetizacao_uf ORDER BY rede" || true
+  log "Contagem (Gold):"
+  athena "SELECT count(*) FROM ${DB_GOLD}.gold_${GOLD_TABLE}" || true
+  log "Atingimento de metas na Gold (amostra):"
+  athena "SELECT meta_atingida_municipio, count(*) AS qtd FROM ${DB_GOLD}.gold_${GOLD_TABLE} GROUP BY meta_atingida_municipio" || true
 }
 
 cmd_all() {
@@ -286,8 +315,10 @@ cmd_all() {
   cmd_crawler_bronze
   cmd_silver
   cmd_crawler_silver
+  cmd_gold
+  cmd_crawler_gold
   cmd_validate
-  log "✅ Pipeline batch concluída (Bronze + Silver)."
+  log "✅ Pipeline batch concluída (Bronze + Silver + Gold)."
 }
 
 # --- Streaming do aluno (opcional / interativo) ----------------------------
@@ -381,11 +412,14 @@ cmd_cleanup() {
   log "Removendo recursos (erros são ignorados)..."
   aws glue delete-job --job-name "$JOB_BRONZE"   2>/dev/null || true
   aws glue delete-job --job-name "$JOB_SILVER"   2>/dev/null || true
+  aws glue delete-job --job-name "$JOB_GOLD"     2>/dev/null || true
   aws glue delete-job --job-name "$JOB_STREAM"   2>/dev/null || true
   aws glue delete-crawler --name "$CRAWLER_BRONZE" 2>/dev/null || true
   aws glue delete-crawler --name "$CRAWLER_SILVER" 2>/dev/null || true
+  aws glue delete-crawler --name "$CRAWLER_GOLD"   2>/dev/null || true
   aws glue delete-database --name "$DB_BRONZE"   2>/dev/null || true
   aws glue delete-database --name "$DB_SILVER"   2>/dev/null || true
+  aws glue delete-database --name "$DB_GOLD"     2>/dev/null || true
   aws lambda delete-function --function-name "$LAMBDA_NAME" 2>/dev/null || true
   aws kinesis delete-stream --stream-name "$STREAM_NAME" 2>/dev/null || true
   aws s3 rm "s3://$BUCKET" --recursive 2>/dev/null || true
@@ -394,7 +428,7 @@ cmd_cleanup() {
 }
 
 usage() {
-  sed -n '3,40p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  sed -n '3,42p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
 }
 
 # ---------------------------------------------------------------------------
@@ -407,6 +441,8 @@ case "${1:-}" in
   crawler-bronze)  cmd_crawler_bronze ;;
   silver)          cmd_silver ;;
   crawler-silver)  cmd_crawler_silver ;;
+  gold)            cmd_gold ;;
+  crawler-gold)    cmd_crawler_gold ;;
   validate)        cmd_validate ;;
   all)             cmd_all ;;
   streaming)        cmd_streaming ;;
