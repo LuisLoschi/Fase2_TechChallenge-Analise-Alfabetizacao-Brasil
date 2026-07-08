@@ -290,7 +290,7 @@ cmd_gold() {
 cmd_crawler_gold() {
   init_vars
   ensure_database "$DB_GOLD"
-  ensure_crawler "$CRAWLER_GOLD" "$DB_GOLD" "gold_" "s3://$BUCKET/gold/"
+  ensure_crawler "$CRAWLER_GOLD" "$DB_GOLD" "gold_" "s3://$BUCKET/gold/$GOLD_TABLE/"
   run_crawler "$CRAWLER_GOLD"
   aws glue get-tables --database-name "$DB_GOLD" --query "TableList[].Name" --output table
 }
