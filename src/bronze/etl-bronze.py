@@ -1,4 +1,3 @@
-import os
 import sys
 import logging
 from datetime import datetime, timezone
@@ -10,7 +9,7 @@ from pyspark.context import SparkContext
 from pyspark.sql import functions as F
 from pyspark.sql.types import (
     StructType, StructField,
-    StringType, IntegerType, DoubleType, TimestampType
+    StringType, IntegerType, DoubleType
 )
 
 args = getResolvedOptions(sys.argv, [
@@ -18,7 +17,6 @@ args = getResolvedOptions(sys.argv, [
     'BUCKET_NAME'
 ])
 
-# Definindo variáveis principais
 BUCKET = args['BUCKET_NAME']
 S3_PATH = f"s3://{BUCKET}/arquivos"
 BRONZE_PATH = f"s3://{BUCKET}/bronze/%s"
@@ -52,7 +50,6 @@ def get_files():
     }
 
 
-# Estrutura do arquivo br_inep_avaliacao_alfabetizacao_uf.csv
 def define_struct_type_evaluation_state_literacy():
     return StructType([
         StructField("ano", IntegerType(), False),
@@ -73,7 +70,6 @@ def define_struct_type_evaluation_state_literacy():
     ])
 
 
-# Estrutura do arquivo br_inep_avaliacao_alfabetizacao_municipio.csv
 def define_struct_type_evaluation_city_literacy():
     return StructType([
         StructField("ano", IntegerType(), False),
@@ -94,7 +90,6 @@ def define_struct_type_evaluation_city_literacy():
     ])
 
 
-# Estrutura do arquivo br_inep_avaliacao_alfabetizacao_meta_alfabetizacao_brasil.csv
 def define_struct_type_evaluation_country_literacy_goal():
     return StructType([
         StructField("ano", IntegerType(), True),
@@ -111,7 +106,6 @@ def define_struct_type_evaluation_country_literacy_goal():
     ])
 
 
-# Estrutura do arquivo br_inep_avaliacao_alfabetizacao_meta_alfabetizacao_uf.csv
 def define_struct_type_evaluation_state_literacy_goal():
     return StructType([
         StructField("ano", IntegerType(), True),
@@ -129,7 +123,6 @@ def define_struct_type_evaluation_state_literacy_goal():
     ])
 
 
-# Estrutura do arquivo br_inep_avaliacao_alfabetizacao_meta_alfabetizacao_municipio.csv
 def define_struct_type_evaluation_city_literacy_goal():
     return StructType([
         StructField("ano", IntegerType(), False),
@@ -149,13 +142,12 @@ def define_struct_type_evaluation_city_literacy_goal():
 
 
 def read_file(filename, schema):
-    
+
     log.info(f"Lendo arquivo: {filename}")
-    
+
     try:
         path = f"{S3_PATH}/{filename}"
-        print(f"[DEBUG] Path: {path}")
-        
+
         df = spark.read \
           .option("header", "true") \
           .option("delimiter", ',') \
@@ -164,35 +156,24 @@ def read_file(filename, schema):
           .option("nullValue", "") \
           .option("emptyValue", "") \
           .schema(schema) \
-          .csv(f"{S3_PATH}/{filename}")
-        
-        total = df.count()
-        
-        print(f"[DEBUG] Total lido: {total} registros | colunas={len(df.columns)}")
-        log.info(f"Foram lidos {total} registros do arquivo {filename} | colunas={len(df.columns)}")
-        
-        print(f"[DEBUG] Primeiras linhas de {filename}:")
-        for row in df.take(3):
-            print(f"[DEBUG] {row}")
-        
+          .csv(path)
+
         df = add_audit_info(filename, df)
-        
+
         return df
-    
+
     except Exception as e:
         log.error(f"Falha ao ler arquivo {filename}: {e}")
-        print(f"[ERROR] Falha ao ler {filename}: {e}")
         raise
 
 
-# Adicionando colunas de ingestão
 def add_audit_info(filename, df):
-    
+
     log.info("Adicionando metadados de ingestao")
-    
+
     ingestion_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     ingestion_timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    path = S3_PATH + filename
+    path = f"{S3_PATH}/{filename}"
     
     return df \
         .withColumn("_ingestion_date",      F.lit(ingestion_date)) \
@@ -201,29 +182,26 @@ def add_audit_info(filename, df):
         .withColumn("_source_entity",       F.lit(filename))
     
 
-# Criando a camada bronze    
 def save_bronze_layer_data(filename, df):
-    
-    folder_name = normalize_folder_name(filename)   # <- aqui
+
+    folder_name = normalize_folder_name(filename)
     file_path = BRONZE_PATH % folder_name
-    
-    log.info(f"Salvando em: {file_path}")
-    print(f"[DEBUG] Salvando em: {file_path}")
-    
+
+    total = df.count()
+    log.info(f"Salvando {total} registros ({len(df.columns)} colunas) em: {file_path}")
+
     df.write \
       .mode("overwrite") \
       .partitionBy("ano") \
       .parquet(file_path)
-      
-    print(f"[DEBUG] Gravação concluída em: {file_path}")
-    log.info(f"Foram gravados {df.count()} registros")
+
+    log.info(f"Gravação concluída em: {file_path}")
 
 
 def normalize_folder_name(filename):
     return filename.replace("br_inep_", "").replace(".csv", "")
 
 
-# Iniciando processamento
 log.info("Iniciando a leitura dos arquivos do Inep")
 
 for filename, schema in get_files().items():

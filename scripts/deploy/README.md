@@ -1,10 +1,10 @@
-# 🛠️ `deploy.sh` — Automação da Pipeline (Bronze + Silver)
+# 🛠️ `deploy.sh` — Automação da Pipeline (Bronze + Silver + Gold)
 
 Script de linha de comando que **provisiona e executa** toda a pipeline da
-arquitetura medalhão (camadas Bronze e Silver) na AWS, de forma **idempotente** e
-por **subcomandos**.
+arquitetura medalhão (camadas Bronze, Silver e Gold) na AWS, de forma
+**idempotente** e por **subcomandos**.
 
-Ele cobre todo o caminho **batch** (Bronze → Silver → crawlers → validação) e,
+Ele cobre todo o caminho **batch** (Bronze → Silver → Gold → crawlers → validação) e,
 separadamente, o fluxo de **streaming** do aluno. A configuração detalhada de
 cada serviço (e os equivalentes no console web) está no
 [`README.md`](../../README.md) principal do projeto.
@@ -77,7 +77,7 @@ O script é dividido em três blocos:
 Fluxo do subcomando `all`:
 
 ```text
-upload ─▶ bronze ─▶ crawler-bronze ─▶ silver ─▶ crawler-silver ─▶ validate
+upload ─▶ bronze ─▶ crawler-bronze ─▶ silver ─▶ crawler-silver ─▶ gold ─▶ crawler-gold ─▶ validate
 ```
 
 ---
@@ -93,7 +93,9 @@ upload ─▶ bronze ─▶ crawler-bronze ─▶ silver ─▶ crawler-silver �
 | `crawler-bronze` | Cria o banco `db_alfabetizacao_bronze` e roda o crawler. |
 | `silver` | Cria/atualiza e executa o Glue Job da Silver. |
 | `crawler-silver` | Cria o banco `db_alfabetizacao_silver` e roda o crawler. |
-| `validate` | Roda consultas de validação no Athena. |
+| `gold` | Cria/atualiza e executa o Glue Job da Gold. |
+| `crawler-gold` | Cria o banco `db_alfabetizacao_gold` e roda o crawler. |
+| `validate` | Roda consultas de validação no Athena (Silver e Gold). |
 | `all` | Executa a sequência completa do caminho **batch**. |
 | `streaming` | *(opcional)* Provisiona Kinesis + Glue streaming + Lambda e inicia a produção do aluno. |
 | `streaming-status` | *(opcional)* Mostra o progresso da ingestão do aluno na Bronze. |
@@ -147,6 +149,8 @@ cd scripts/deploy
 ./deploy.sh crawler-bronze
 ./deploy.sh silver
 ./deploy.sh crawler-silver
+./deploy.sh gold
+./deploy.sh crawler-gold
 ./deploy.sh validate
 
 # 2. Ao terminar, remover os recursos
@@ -176,9 +180,11 @@ job), ela fica **fora** do `all`:
 # 3. Quando os dados pararem de crescer, encerre o job de streaming
 ./deploy.sh streaming-stop
 
-# 4. Reprocesse a Silver para incluir a entidade de aluno
+# 4. Reprocesse a Silver e a Gold para incluir a entidade de aluno
 ./deploy.sh silver
 ./deploy.sh crawler-silver
+./deploy.sh gold
+./deploy.sh crawler-gold
 ```
 
 > O script já trata os dois detalhes que costumam quebrar este fluxo via CLI:
