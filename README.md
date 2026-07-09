@@ -82,6 +82,8 @@ Os arquivos utilizados são disponibilizados publicamente pelo [INEP](https://ww
 
 Os arquivos ficam armazenados no S3 sob o prefixo `s3://<BUCKET_NAME>/arquivos/`.
 
+> ⚠️ **Observação:** por conta do tamanho, o arquivo `br_inep_avaliacao_alfabetizacao_aluno.csv` não é versionado no Git e deve ser inserido manualmente em [`data/fonte-dados/`](data/fonte-dados/) antes de rodar a pipeline (disponível no link de download abaixo).
+
 **Os arquivos utilizados também podem ser baixados clicando no link:** 🔗[Download base de dados](https://drive.google.com/file/d/16tnS_J9I_r2oTVbugjK_q1svYGd6tj2n/view?usp=sharing)
 
 <a id="estrutura-do-repositório"></a>
@@ -100,7 +102,7 @@ Os arquivos ficam armazenados no S3 sob o prefixo `s3://<BUCKET_NAME>/arquivos/`
 │       ├── br_inep_avaliacao_alfabetizacao_meta_alfabetizacao_brasil.csv
 │       ├── br_inep_avaliacao_alfabetizacao_meta_alfabetizacao_uf.csv
 │       ├── br_inep_avaliacao_alfabetizacao_meta_alfabetizacao_municipio.csv
-│       └── br_inep_avaliacao_alfabetizacao_aluno.csv
+│       └── br_inep_avaliacao_alfabetizacao_aluno.csv  [INSERIR MANUALMENTE — não versionado, ver observação acima]
 ├── scripts/
 |   └── deploy/
 │       ├── deploy.sh (automação da pipeline via AWS CLI)
