@@ -621,6 +621,7 @@ s3://<BUCKET_NAME>/
 │
 └── scripts/
     ├── etl-bronze.py
+    ├── etl-silver.py
     ├── glue-streaming-job.py
     └── producer-student-data.py
 ```
@@ -834,6 +835,8 @@ s3://<BUCKET_NAME>/
 │
 └── scripts/
     ├── etl-bronze.py
+    ├── etl-silver.py
+    ├── etl-gold.py
     ├── glue-streaming-job.py
     └── producer-student-data.py
 ```
