@@ -36,6 +36,7 @@ Projeto desenvolvido para o **Tech Challenge da Fase 2 da FIAP (IA Scientist)**,
       - [Scripts](#scripts-gold)
       - [Estrutura de Pastas no S3](#estrutura-de-pastas-no-s3-gold)
       - [Configuração dos Serviços AWS](#configuracao-dos-servicos-aws-gold)
+- [Dashboard Executivo (camada de consumo)](#dashboard-executivo)
 - [Tecnologias Utilizadas](#tecnologias-utilizadas)
 - [Decisões Arquiteturais](#decisoes-arquiteturais)
 - [Monitoramento da Pipeline](#monitoramento)
@@ -103,6 +104,12 @@ Os arquivos ficam armazenados no S3 sob o prefixo `s3://<BUCKET_NAME>/arquivos/`
 │       ├── br_inep_avaliacao_alfabetizacao_meta_alfabetizacao_uf.csv
 │       ├── br_inep_avaliacao_alfabetizacao_meta_alfabetizacao_municipio.csv
 │       └── br_inep_avaliacao_alfabetizacao_aluno.csv  [INSERIR MANUALMENTE — não versionado, ver observação acima]
+├── dashboard/
+|   ├── app.py (aplicação Streamlit — KPIs, filtros e gráficos)
+|   ├── queries.py (consultas SQL ao Athena, com cache)
+|   ├── athena_connection.py (conexão única com o Athena via awswrangler)
+|   ├── requirements.txt (dependências do dashboard)
+│   └── README.md (objetivo, tecnologias e como executar o dashboard)
 ├── scripts/
 |   └── deploy/
 │       ├── deploy.sh (automação da pipeline via AWS CLI)
@@ -922,6 +929,36 @@ GROUP BY ano, meta_atingida_municipio
 ORDER BY ano, meta_atingida_municipio;
 ```
 
+<a id="dashboard-executivo"></a>
+## 📚 Dashboard Executivo (camada de consumo)
+
+Fechando o ciclo da arquitetura medalhão, o projeto inclui um **dashboard em
+Streamlit** que transforma a camada Gold em um painel analítico interativo — a
+camada de **visualização** sobre `gold_alfabetizacao_analise_output`. Ele
+consome a Gold **diretamente via Amazon Athena**, com todas as agregações feitas
+no Athena (*partition pruning* por `ano`) e resultados em cache, de modo que o
+Streamlit recebe apenas o dado já agregado.
+
+```mermaid
+flowchart LR
+    GOLD["🥇 Gold no S3<br/>(Parquet)"] --> ATHENA["Amazon Athena<br/>(agrega + partition pruning)"]
+    ATHENA -->|DataFrame agregado| APP["🖥️ Streamlit<br/>(app.py + queries.py)"]
+    USER["👤 Usuário<br/>(ano · rede · região · UF)"] <--> APP
+```
+
+**O que o painel entrega:**
+- KPIs nacionais (taxa oficial vs. meta, variação em p.p., % de municípios que atingiram a meta);
+- Brasil realizado × meta, ranking de UFs, distribuição municipal por faixa e atingimento por região;
+- destaques municipais (top/bottom 10) para priorização de política pública;
+- seção condicional de **presença × aprendizagem** (microdados de aluno), separando problema de *participação* de problema de *aprendizagem*;
+- tabela detalhada por município com busca e **exportação em CSV**.
+
+> ▶️ **Como executar:** `pip install -r dashboard/requirements.txt` e
+> `streamlit run dashboard/app.py`. O passo a passo completo, as variáveis de
+> ambiente (`ATHENA_REGION`, `ATHENA_DATABASE`, `ATHENA_WORKGROUP`,
+> `ATHENA_S3_OUTPUT`), as tecnologias e a descrição de cada seção estão no
+> **[README do dashboard](dashboard/README.md)**.
+
 <a id="tecnologias-utilizadas"></a>
 ## 🛠️ Tecnologias Utilizadas
 
@@ -935,7 +972,8 @@ ORDER BY ano, meta_atingida_municipio;
 | **AWS Glue Data Catalog** | Metastore centralizado para consultas via Athena | Catálogo único compartilhado por Glue e Athena; gratuito no volume deste projeto |
 | **Amazon Athena** | Consultas SQL sobre Bronze, Silver e Gold | SQL serverless direto no S3, pago por dado escaneado — sem warehouse para administrar |
 | **Apache Parquet** | Formato colunar das três camadas | Compressão e leitura colunar reduzem armazenamento e o volume escaneado pelo Athena (menor custo por consulta) |
-| **Python 3** | Linguagem dos scripts (ETL, streaming, producer) | Padrão de mercado em engenharia de dados; API PySpark madura e legível |
+| **Python 3** | Linguagem dos scripts (ETL, streaming, producer) e do dashboard | Padrão de mercado em engenharia de dados; API PySpark madura e legível |
+| **Streamlit + Plotly** | Dashboard executivo (camada de consumo) sobre a Gold | Cria uma aplicação web analítica em Python puro, sem front-end dedicado; consome o Athena via **awswrangler**, com cache de consultas e gráficos interativos |
 
 <a id="decisoes-arquiteturais"></a>
 ## ⚖️ Decisões Arquiteturais
@@ -991,12 +1029,33 @@ Valores de lista em `us-east-1` (consulte a [página de preços da AWS](https://
 | AWS Glue (jobs batch) | US$ 0,44 por DPU-hora (mín. 1 min) | Bronze ~10 min + Silver ~15 min + Gold ~10 min × 2 DPUs | ~US$ 0,51 |
 | AWS Glue (streaming) | US$ 0,44 por DPU-hora | ~1 h × 2 DPUs (janela de ingestão do aluno) | ~US$ 0,88 |
 | AWS Glue Crawlers | US$ 0,44 por DPU-hora (mín. 10 min) | 3 crawlers (bronze, silver, gold) | ~US$ 0,22 |
-| Amazon Kinesis (on-demand) | US$ 0,04/stream-hora + US$ 0,08/GB in | ~1 h + ~0,25 GB | ~US$ 0,06 |
+| Amazon Kinesis (on-demand) | US$ 0,04/stream-hora + US$ 0,08/GB in | ~1 h + ~0,25 GB | ~US$ 0,06 |g
 | AWS Lambda | US$ 0,0000167/GB-s | 1 execução × 15 min × 512 MB | ~US$ 0,01 |
 | Amazon Athena | US$ 5,00 por TB escaneado | Validações (<100 MB, dado em Parquet) | <US$ 0,01 |
 | Amazon S3 | US$ 0,023/GB-mês | ~1 GB (fontes + 3 camadas + checkpoints) | ~US$ 0,02/mês |
 | Glue Data Catalog | Gratuito até 1M de objetos/requisições por mês | ~15 tabelas | US$ 0,00 |
 | **Total** | | **Execução completa da pipeline (batch + streaming)** | **~US$ 1,70** |
+
+### Custo de operação do dashboard
+
+O dashboard é **camada de consumo** e não provisiona nada: o custo vem apenas das
+consultas que ele dispara no **Amazon Athena** e do armazenamento dos resultados
+no **S3**. Valores de lista em `us-east-1`, de fontes oficiais da AWS:
+
+| Item | Preço de lista (fonte AWS) | Uso pelo dashboard | Custo |
+|---|---|---|---|
+| Athena — dado escaneado | **US$ 5,00 por TB**, com **mínimo de 10 MB cobrados por consulta** ([Amazon Athena pricing](https://aws.amazon.com/athena/pricing/)) | A Gold tem ~600 KB em Parquet + *partition pruning*: cada consulta escaneia bem menos que o mínimo → **cobrada como 10 MB** ≈ US$ 0,0000477/consulta | ~US$ 0,00005 por consulta |
+| Athena — carga de uma tela (≈14 consultas por recorte) | idem acima | 1ª renderização de um filtro novo dispara ~14 consultas (as repetições vêm do cache de 1 h) | ~US$ 0,0007 por recorte novo |
+| S3 — resultados das consultas | **US$ 0,023 por GB-mês** (S3 Standard, primeiros 50 TB) ([Amazon S3 pricing](https://aws.amazon.com/s3/pricing/)) | Alguns KB de CSV por consulta em `athena-results/` | < US$ 0,01/mês |
+| S3 — requisições GET/PUT | **US$ 0,0004 por 1.000 GET** / **US$ 0,005 por 1.000 PUT** ([Amazon S3 pricing](https://aws.amazon.com/s3/pricing/)) | Poucas centenas de requisições por sessão | desprezível |
+| **Total** | | **Sessão típica de análise (vários filtros, com cache)** | **< US$ 0,01** |
+
+> **Por que tão barato:** o Athena cobra por byte escaneado e aplica um **piso de
+> 10 MB por consulta** — como a Gold em Parquet particionado escaneia menos que
+> esse piso, o custo por consulta é praticamente o mínimo. O cache do Streamlit
+> (`@st.cache_data`, TTL de 1 h) evita reconsultar filtros já vistos, e o Glue
+> Data Catalog é gratuito no volume do projeto. Um dia inteiro de uso do painel
+> por vários avaliadores dificilmente ultrapassa **poucos centavos de dólar**.
 
 ### Decisões que reduzem custos operacionais
 
@@ -1052,7 +1111,7 @@ Resultados extraídos da camada Gold (dados INEP 2023–2024, rede pública):
 - [✅] Camada **Bronze** — ingestão e armazenamento dos dados brutos do INEP no Amazon S3 em formato Parquet
 - [✅] Camada **Silver** — limpeza, padronização, joins e enriquecimento dos dados
 - [✅] Camada **Gold** — agregações e métricas para análise de alfabetização
-- [ ] Dashboard / relatório com os resultados da análise
+- [✅] **Dashboard executivo** em Streamlit sobre a Gold (via Athena) — ver [`dashboard/`](dashboard/README.md)
 
 <a id="entrega-executiva"></a>
 ## 🎥 Entrega Executiva
