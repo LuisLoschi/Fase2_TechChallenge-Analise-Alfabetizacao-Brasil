@@ -15,6 +15,7 @@ cada serviço (e os equivalentes no console web) está no
 
 - [Quando usar este script](#quando-usar)
 - [Pré-requisitos](#pré-requisitos)
+- [Configurar/atualizar credenciais da AWS](#credenciais-aws)
 - [Como funciona (visão geral)](#como-funciona)
 - [Subcomandos](#subcomandos)
 - [Variáveis de configuração](#variáveis-de-configuração)
@@ -58,6 +59,55 @@ Valide tudo de uma vez:
 ```
 
 Saída esperada: versão da CLI, ID da conta, região, nome do bucket e role.
+
+---
+
+<a id="credenciais-aws"></a>
+## Configurar/atualizar credenciais da AWS
+
+No AWS Academy, as credenciais são **temporárias** e expiram a cada sessão de
+laboratório. Quando isso acontece, o `deploy.sh` para de funcionar com erro de
+credenciais inválidas/expiradas (veja a [tabela de solução de
+problemas](#solução-de-problemas)). Para renovar:
+
+1. No **AWS Academy Learner Lab**, inicie o laboratório (clique em **Start Lab**
+   e aguarde o círculo ficar verde).
+2. Clique em **AWS Details** e depois em **Show** ao lado de **AWS CLI**.
+3. Copie o bloco exibido, que tem este formato:
+
+   ```ini
+   [default]
+   aws_access_key_id=...
+   aws_secret_access_key=...
+   aws_session_token=...
+   ```
+
+4. Abra (ou crie) o arquivo `~/.aws/credentials` no seu editor de texto.
+   - Windows (Git Bash): `~` aponta para `C:\Users\<seu-usuário>`. Se o arquivo
+     ou a pasta `.aws` não existirem, crie-os primeiro:
+     ```bash
+     mkdir -p ~/.aws
+     touch ~/.aws/credentials
+     ```
+     > Para editar o conteúdo, abra o arquivo em um editor:
+     > ```bash
+     > code ~/.aws/credentials     # VS Code
+     > notepad ~/.aws/credentials  # Bloco de notas do Windows
+     > nano ~/.aws/credentials     # editor de terminal (se disponível)
+     > ```
+5. Substitua **todo o conteúdo** do arquivo pelo bloco copiado no passo 3 (ou,
+   se já existir um perfil `[default]`, sobrescreva apenas esse bloco).
+6. Salve o arquivo.
+7. Valide que a CLI está enxergando as novas credenciais:
+
+   ```bash
+   aws sts get-caller-identity
+   ```
+
+   A saída deve mostrar o `Account`, `UserId` e `Arn` sem erros.
+
+8. Rode `./deploy.sh prereqs` para confirmar que o script também reconhece as
+   credenciais e siga normalmente com os demais subcomandos.
 
 ---
 
@@ -132,6 +182,21 @@ BUCKET="meu-bucket-personalizado" WORKERS=5 ./deploy.sh silver
 
 <a id="exemplos-de-uso"></a>
 ## Exemplos de uso
+
+**pipeline completa com dados de aluno (recomendado):**
+
+```bash
+cd scripts/deploy
+
+./deploy.sh prereqs           # 0. Conferir pré-requisitos
+./deploy.sh upload            # 1. Bucket + CSVs + scripts no S3
+./deploy.sh streaming         # 2. Inicia a ingestão do aluno (Kinesis → Bronze)
+./deploy.sh streaming-status  # 3. Repita até o volume parar de crescer
+./deploy.sh streaming-stop    # 4. Encerra o job de streaming (evita custo/hora)
+./deploy.sh all               # 5. Batch completo — Silver e Gold já enxergam o aluno
+```
+
+**Somente caminho batch (sem métricas de aluno na Gold):**
 
 ```bash
 # Entrar na pasta do script
