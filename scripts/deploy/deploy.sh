@@ -194,14 +194,17 @@ ensure_database() {
 ensure_crawler() {
   local name="$1" db="$2" prefix="$3" path="$4"
   local targets="{\"S3Targets\":[{\"Path\":\"$path\"}]}"
+  local config="{\"Version\":1.0,\"Grouping\":{\"TableLevelConfiguration\":3}}"
   if aws glue get-crawler --name "$name" >/dev/null 2>&1; then
     log "Atualizando Crawler: $name"
     aws glue update-crawler --name "$name" --role "$ROLE_ARN" \
-      --database-name "$db" --table-prefix "$prefix" --targets "$targets" >/dev/null
+      --database-name "$db" --table-prefix "$prefix" --targets "$targets" \
+      --configuration "$config" >/dev/null
   else
     log "Criando Crawler: $name"
     aws glue create-crawler --name "$name" --role "$ROLE_ARN" \
-      --database-name "$db" --table-prefix "$prefix" --targets "$targets" >/dev/null
+      --database-name "$db" --table-prefix "$prefix" --targets "$targets" \
+      --configuration "$config" >/dev/null
   fi
 }
 
@@ -370,7 +373,10 @@ cmd_streaming() {
         --zip-file fileb://producer.zip --environment "$env" >/dev/null
     fi
   ) || fail "Falha ao criar/atualizar a Lambda."
-  rm -rf "$tmp"
+  rm -rf "$tmp" 2>/dev/null || true
+
+  aws lambda put-function-event-invoke-config --function-name "$LAMBDA_NAME" \
+    --maximum-retry-attempts 0 >/dev/null
 
   # 4) Dispara a produção (assíncrona)
   log "Invocando a Lambda producer (envio assíncrono ao Kinesis)..."
@@ -390,6 +396,16 @@ cmd_streaming_status() {
     aws s3 ls "$prefix" --recursive --summarize | tail -5
   else
     log "  (ainda sem dados — aguarde alguns minutos após iniciar o streaming)"
+  fi
+  # Contagem exata via Athena (disponível após rodar o crawler-bronze).
+  # Compare 'registros' com o total de linhas do CSV de alunos; 'alunos_distintos'
+  # menor que 'registros' indica duplicação vinda do streaming.
+  if aws glue get-table --database-name "$DB_BRONZE" \
+      --name "bronze_avaliacao_alfabetizacao_aluno" >/dev/null 2>&1; then
+    log "Registros do aluno na Bronze (Athena):"
+    athena "SELECT count(*) AS registros, count(DISTINCT id_aluno) AS alunos_distintos FROM ${DB_BRONZE}.bronze_avaliacao_alfabetizacao_aluno" || true
+  else
+    log "  (tabela ainda não catalogada — rode ./deploy.sh crawler-bronze para habilitar a contagem)"
   fi
 }
 
