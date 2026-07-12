@@ -194,9 +194,6 @@ ensure_database() {
 ensure_crawler() {
   local name="$1" db="$2" prefix="$3" path="$4"
   local targets="{\"S3Targets\":[{\"Path\":\"$path\"}]}"
-  # Fixa a tabela no nível da pasta da entidade (bucket=1, camada=2, entidade=3).
-  # Sem isso, enquanto houver uma única entidade na camada o crawler cria a
-  # tabela na raiz (ex.: bronze_bronze) em vez de uma tabela por entidade.
   local config="{\"Version\":1.0,\"Grouping\":{\"TableLevelConfiguration\":3}}"
   if aws glue get-crawler --name "$name" >/dev/null 2>&1; then
     log "Atualizando Crawler: $name"
