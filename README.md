@@ -201,11 +201,11 @@ Job do **AWS Glue** responsável por ler os 5 arquivos CSV do INEP armazenados n
 Função **AWS Lambda** que simula a chegada gradual de dados de alunos, lendo o arquivo `br_inep_avaliacao_alfabetizacao_aluno.csv` do S3 e enviando os registros em lotes para o **Amazon Kinesis Data Streams**.
 
 **O que faz:**
-- Lê configuração via **variáveis de ambiente** (`BUCKET_NAME`, `CSV_PATH`, `AWS_REGION`)
+- Lê configuração via **variáveis de ambiente** (`BUCKET_NAME`, `CSV_PATH`, `AWS_REGION`, `SEND_DELAY`)
 - Faz download do CSV do S3 para `/tmp/aluno.csv`
 - Envia registros em lotes de 500 para o stream `stream-alfabetizacao-aluno`
 - Usa `id_aluno` como partition key do Kinesis (fallback: `"default"`)
-- Aguarda 0.3s entre lotes para simular chegada gradual de dados
+- Aguarda 0.05s entre lotes para simular chegada gradual de dados
 
 ### [`src/bronze/glue-streaming-job.py`](src/bronze/glue-streaming-job.py) — AWS Glue Streaming Job
 

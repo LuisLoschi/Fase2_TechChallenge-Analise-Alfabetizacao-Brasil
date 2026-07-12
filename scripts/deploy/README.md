@@ -148,7 +148,7 @@ upload ─▶ bronze ─▶ crawler-bronze ─▶ silver ─▶ crawler-silver �
 | `validate` | Roda consultas de validação no Athena (Silver e Gold). |
 | `all` | Executa a sequência completa do caminho **batch**. |
 | `streaming` | *(opcional)* Provisiona Kinesis + Glue streaming + Lambda e inicia a produção do aluno. |
-| `streaming-status` | *(opcional)* Mostra o progresso da ingestão do aluno na Bronze. |
+| `streaming-status` | *(opcional)* Mostra o progresso da ingestão do aluno na Bronze; se a tabela já estiver catalogada, também mostra a contagem exata via Athena (`registros` vs. `alunos_distintos`, para detectar duplicação). |
 | `streaming-stop` | *(opcional)* Para o Glue streaming job do aluno. |
 | `cleanup` | Remove todos os recursos criados (evita custos). |
 | `help` | Mostra a ajuda. |
