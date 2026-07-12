@@ -53,8 +53,8 @@ kinesis_stream = spark \
 
 
 def process_batch(data_frame, batch_id):
-    
-    if data_frame.count() == 0:
+
+    if data_frame.isEmpty():
         return
 
     # O payload chega binário no campo 'data'; campos numéricos podem vir como string vazia
@@ -76,7 +76,10 @@ def process_batch(data_frame, batch_id):
     df.write.mode("append").partitionBy("ano").parquet(BRONZE_PATH)
     
 
-# O checkpoint no S3 guarda o progresso; para reprocessar do início, apague a pasta antes de iniciar o job
+# O checkpoint no S3 guarda o progresso. Para reprocessar do início, apague o
+# checkpoint E a pasta bronze/avaliacao_alfabetizacao_aluno/ antes de iniciar o
+# job — a escrita é em append, e apagar só o checkpoint duplica na Bronze tudo
+# que ainda estiver dentro da retenção do stream.
 kinesis_stream.writeStream \
     .foreachBatch(process_batch) \
     .option("checkpointLocation", f"s3://{BUCKET}/checkpoints/avaliacao_alfabetizacao_aluno/") \
