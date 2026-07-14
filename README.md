@@ -2,7 +2,7 @@
 
 ![Data Science](https://img.shields.io/badge/Area-Data%20Science-blue)
 ![Python](https://img.shields.io/badge/Language-Python-blue)
-![Static Badge](https://img.shields.io/badge/Status-inprogress-yellow)
+![Static Badge](https://img.shields.io/badge/Status-Done-yellow)
 
 Grupo: Eduardo Rossi | Luis Loschi | Luiza Santos | Vitória Santos | Vyctor Correia
 
@@ -1121,7 +1121,7 @@ Resultados extraídos da camada Gold (dados INEP 2023–2024, rede pública):
 
 Este projeto também inclui materiais voltados para stakeholders e lideranças, focados em tomada de decisão:
 
-* **[Slides de Apresentação](#.pptx):** Material visual com o contexto do problema, arquitetura da solução, valor da pipeline para análises educacionais e potencial uso para inteligência artificial (Em construção 🚧)
+* **[Slides de Apresentação](apresentacao/PPT_Tech_Challenge_Fase_2.pptx):** Material visual com o contexto do problema, arquitetura da solução, valor da pipeline para análises educacionais e potencial uso para inteligência artificial.
 
 <a id="resumo-executivo"></a>
 ## 💼 Resumo executivo
